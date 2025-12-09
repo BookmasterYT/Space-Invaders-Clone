@@ -5,6 +5,7 @@ A clone of Space Invaders I created for my Programming II class
 
 
 To Do:
-- Win condition
-- Menu
 - High Score
+- Random bonus ship
+- Maybe change ship to OG cannon
+- Revamp losing screen
