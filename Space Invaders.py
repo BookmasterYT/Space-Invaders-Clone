@@ -6,6 +6,34 @@ import math
 
 ### SOUNDS FROM https://www.classicgaming.cc/classics/space-invaders/sounds
 
+class Star(object):
+    def __init__(self, w):
+        self.w = w
+        self.x = random.randint(20,WIDTH-20)
+        self.y = 0
+    def draw(self, screen_param):
+        self.y += 2
+        pygame.draw.circle(screen_param, color.white, (self.x, self.y), self.w)
+        
+class Button(object):
+    def __init__(self,x,y,w,h,c,text):
+        self.rect = pygame.Rect(x,y,w,h)
+        self.x = x
+        self.y = y
+        self.width = w
+        self.height = h
+        self.color = c
+        self.txt = font.render(text, True, color.white)
+        self.txt_center_pad = (w//2)-(len(text)*5)
+        self.iterator = random.randint(0,100)
+    def draw(self, screen_param):
+        surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        pygame.draw.rect(surface, self.color, (self.x+10, self.y+10, self.width-20, self.height-20))
+        pygame.draw.rect(surface, self.color, self.rect, 20, 15)
+        self.iterator += 3
+        surface.blit(self.txt, (self.x+self.txt_center_pad,self.y+15))
+        surface = pygame.transform.rotate(surface, math.sin(math.radians(self.iterator)))
+        screen_param.blit(surface, (0,0))
 
 class Color(object):
     """
@@ -20,10 +48,11 @@ class Color(object):
         self.purple = (153,0,153)
         self.white = (255,255,255)
         self.black = (0,0,0)
+        self.light_black = (10,10,10)
         self.grey = (64,64,64)
         self.dark_grey = (32,32,32)
-        self.dark_transparent_black = (0,0,0,175)
-        self.light_transparent_black = (0,0,0,50)
+        self.dark_transparent_black = (64,64,64,175)
+        self.light_transparent_black = (64,64,64,50)
         self.transparent_purple = (147,112,219,10)
 
 class Ship(object):
@@ -51,6 +80,7 @@ class Enemy(object):
     id = 0
     speed = 10
     movement_cooldown = 1
+    delay = 1
     def __init__(self, img, x, y):
         self.x = x
         self.y = y
@@ -69,14 +99,14 @@ class Enemy(object):
             if Enemy.id == self.id:
                 self.dead = True
                 enemy_death_sound.play()
-                ship.score += 10
+                ship.score += 10 if self.id >= 8 else 20
                 break
             i += 1
     def draw(self):
         if not self.dead:
             self.rect = (self.x,self.y,self.w,self.h)
             screen.blit(self.img, (self.x,self.y))
-            if random.randint(1,1000) == 2:
+            if random.randint(1,5000) == 2:
                 bullets.append(Bullet(is_enemy=True, enemy_id=self.id))
     def move(self):
         if not self.dead:
@@ -84,7 +114,7 @@ class Enemy(object):
                 self.x += Enemy.speed
             if self.moving_left:
                 self.x -= Enemy.speed
-     
+
 class Bullet(object):
     id = 0
     cooldown = 0
@@ -117,6 +147,7 @@ class Bullet(object):
             elif self.enemy:
                 self.y += self.speed
                 self.collision_player()
+            self.collision_bunker()
     def collision_enemy(self):
         if self.y <= 0:
             self.delete()
@@ -133,7 +164,12 @@ class Bullet(object):
             if self.rect.colliderect(ship.rect):
                 ship.health -= 1
                 self.delete()
-                
+    def collision_bunker(self):
+        for Bunker in bunkers:
+            if self.rect.colliderect(Bunker.rect):
+                if not Bunker.dead:
+                    Bunker.health -= 1
+                    self.delete()
     def delete(self):
         i = 0
         for Bullet in bullets:
@@ -142,14 +178,31 @@ class Bullet(object):
                 break
             i += 1
 
+class Bunker(object):
+    def __init__(self,x,y,img):
+        self.x = x
+        self.y = y
+        self.img_list = [scaled_bunker5,scaled_bunker4,scaled_bunker3,scaled_bunker2,scaled_bunker]
+        self.img = self.img_list[0]
+        self.health = 5
+        self.rect = (self.x+63,self.y+81,79,50)
+        self.dead = False
+    def draw(self):
+        if not self.dead:
+            screen.blit(self.img, (self.x,self.y))
+            self.img = self.img_list[self.health-1]
+            if self.health <= 0:
+                self.dead = True
+
+        
 
 
 def lose():
     font = pygame.font.Font(None, 128)
     ship_death_sound.play()
     screen.fill(color.grey)
-    display_text("You Lose", color.red, 200, 230, font)
-    outline_effect()
+    display_text("Game Over", color.red, 170, 230, font)
+    outline_effect(screen)
     apply_crt_effect(screen)
     screen_real.blit(screen, (0,0))
     pygame.display.flip()
@@ -157,7 +210,32 @@ def lose():
     quit()
 
 def win():
-    print("win")
+    menu_music.stop() # Just in case
+    music.stop()
+    menu_music.play()
+    win_screen = pygame.Surface((WIDTH,HEIGHT), pygame.SRCALPHA)
+    quit_button = Button(310, 350, 150, 60, color.black, "< Quit >")
+    big_font = pygame.font.Font(None, 64)
+    running = True
+    while running:
+        win_screen.fill(color.black)
+        outline_effect(win_screen)
+        display_text("You Win!", color.white, 300, 100, big_font, win_screen)
+        display_text(f"Score: {ship.score}", color.white, 350, 200, font, win_screen)
+        quit_button.draw(win_screen)
+        stars(win_screen, stars_list)
+        apply_crt_effect(win_screen)
+        screen_real.blit(win_screen, (0,0))
+        pygame.display.flip()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if quit_button.rect.collidepoint(event.pos):
+                    pygame.quit()
+                    quit()
+        clock.tick(FPS)
 
 def load_enemies(amount=40, spacing=20):
     list = []
@@ -168,33 +246,39 @@ def load_enemies(amount=40, spacing=20):
         if x*50+(x*spacing) >= WIDTH-160:
             y += 60
             x = 2
-        list.append(Enemy(scaled_enemy, x*50+(x*spacing), y))
+        if y > 100:
+            list.append(Enemy(scaled_enemy2, x*50+(x*spacing), y))
+        else:
+            list.append(Enemy(scaled_enemy1, x*50+(x*spacing), y))
     return list
 
-def display_text(text, color, x, y, font):
+def display_text(text, color, x, y, font, screen_param):
     new_text = font.render(text, False, color)
-    screen.blit(new_text, (x,y))
+    screen_param.blit(new_text, (x,y))
 
 def refresh_display():
-    ship.score_txt = f"Score: {ship.score}"
-    screen.fill(color.dark_grey)
+    ship.score_txt = f"Score: {ship.score}                        Health: {ship.health}"
+    screen.fill(color.black)
+    stars(screen, stars_list)
     ship.draw()
     for Bullet in bullets:
         Bullet.fly()
     for Enemy in enemies:
         Enemy.draw() 
-    outline_effect()
-    display_text(ship.score_txt, color.white, 30, 20, font)
+    for Bunker in bunkers:
+        Bunker.draw()
+    outline_effect(screen)
+    display_text(ship.score_txt, color.white, 30, 20, font, screen)
     apply_crt_effect(screen, intensity="medium", pixelation="minimum")
     screen_real.blit(screen, (0,0))
     pygame.display.flip()
 
 def ship_movement():
-    if key.a:
+    if key.a and ship.x >= 20:
         ship.x -= SPEED_BASE*ship.speed
-    if key.d:
+    if key.d and ship.x <= WIDTH-70:
         ship.x += SPEED_BASE*ship.speed
-    
+
 def enemy_movement():
     if Enemy.movement_cooldown <= 0:
         for i in range(len(enemies)):
@@ -206,7 +290,7 @@ def enemy_movement():
                 for i in range(len(enemies)):
                     enemies[i].moving_right = False
                     enemies[i].moving_left = True
-                    enemies[i].y += 60
+                    enemies[i].y += 10
                 break
             if enemies[i].x <= 30:
                 for e in range(len(enemies)-i):
@@ -215,15 +299,25 @@ def enemy_movement():
                 for i in range(len(enemies)):
                     enemies[i].moving_right = True
                     enemies[i].moving_left = False
-                    enemies[i].y += 60
+                    enemies[i].y += 10
                 break
-        Enemy.movement_cooldown = ENEMY_MOVEMENT_DELAY
+        Enemy.movement_cooldown = enemies[0].delay
+    if ship.score >= 350:
+        Enemy.delay = 0.1
+    elif ship.score >= 300:
+        Enemy.delay = 0.2
+    elif ship.score >= 250:
+        Enemy.delay = 0.4
+    elif ship.score >= 200:
+        Enemy.delay = 0.6
+    elif ship.score >= 100:
+        Enemy.delay = 0.8
 
 def cooldown():
     if Bullet.cooldown > 0:
         Bullet.cooldown -= 1/(FPS*BULLET_COOLDOWN)
     if Enemy.movement_cooldown > 0:
-        Enemy.movement_cooldown -= 1/(FPS*ENEMY_MOVEMENT_DELAY)
+        Enemy.movement_cooldown -= 1/(FPS*Enemy.delay)
 
 def event_checker():
     for event in pygame.event.get():
@@ -239,6 +333,8 @@ def event_checker():
                     key.space = True
                 if event.key == pygame.K_F10:
                     lose()
+                if event.key == pygame.K_F11:
+                    win()
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_a or event.key == pygame.K_LEFT:
                     key.a = False
@@ -252,7 +348,7 @@ def event_checker():
                         Bullet.cooldown = BULLET_COOLDOWN
     if ship.health <= 0:
         lose()
-    elif enemies == []:
+    elif ship.score == 400:
         win()
 
 def main():
@@ -265,14 +361,78 @@ def main():
         refresh_display()
         clock.tick(FPS)
 
-def outline_effect():
+def stars(screen_param, stars):
+    for e in range(random.randint(0,10)):
+        if random.randint(1,50) == 2:
+            stars.append(Star(1))
+    for i in range(len(stars)):
+        stars[i].draw(screen_param)
+
+def outline_effect(screen_param):
     pygame.draw.rect(outline, color.light_transparent_black, (0,0,WIDTH,HEIGHT), 10, 70)
     pygame.draw.rect(outline, color.dark_transparent_black, (0,0,WIDTH,HEIGHT), 10, 50)
-    pygame.draw.rect(outline, color.black, (0,0,WIDTH,HEIGHT), 10, 30)
-    pygame.draw.rect(outline, color.black, (0,0,WIDTH,HEIGHT), 10)
+    pygame.draw.rect(outline, color.dark_grey, (0,0,WIDTH,HEIGHT), 10, 30)
+    pygame.draw.rect(outline, color.dark_grey, (0,0,WIDTH,HEIGHT), 10)
 
 
-    screen.blit(outline, (0,0))
+    screen_param.blit(outline, (0,0))
+
+def start_screen(stars_param):
+    start_screen = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    start_button = Button(300, 425, 200, 50, color.black, "< Start >")
+    quit_button = Button(300, 475, 200, 50, color.black, "< Quit >")
+    difficulty_left = Button(300, 525, 50, 50, color.black, "<<" )
+    difficulty_right = Button(440, 525, 50, 50, color.black, ">>" )
+    difficulty_txt = ["   Easy", "Normal", "   Hard"]
+    difficulty = 2
+    running = True
+    while running:
+        start_screen.fill(color.black)
+        start_button.draw(start_screen)
+        quit_button.draw(start_screen)
+        display_text(difficulty_txt[difficulty-1], color.white, 360, 545, font, start_screen)
+        difficulty_left.draw(start_screen)
+        difficulty_right.draw(start_screen)
+        outline_effect(start_screen)
+        stars(start_screen, stars_param)
+        start_screen.blit(scaled_logo, (200,50))
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                quit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if start_button.rect.collidepoint(event.pos):
+                    if difficulty == 1:
+                        ship.health = 3
+                    elif difficulty == 2:
+                        ship.health = 2
+                    else:
+                        ship.health = 1
+                    return
+                if quit_button.rect.collidepoint(event.pos):
+                    pygame.quit()
+                    quit()
+                if difficulty_right.rect.collidepoint(event.pos):
+                    difficulty += 1
+                    if difficulty > 3:
+                        difficulty = 0
+                if difficulty_left.rect.collidepoint(event.pos):
+                    difficulty -= 1
+                    if difficulty < 1:
+                        difficulty = 3
+        apply_crt_effect(start_screen, intensity="medium", pixelation="minimum")
+        screen_real.blit(start_screen, (0,0))
+        pygame.display.flip()
+        clock.tick(FPS)
+
+def load_bunkers():
+    bunkers = []
+    for i in range(4):
+        bunkers.append(Bunker(i*(200), HEIGHT-250, scaled_bunker))
+    return bunkers
+
+
+
 
 ### Copied CRT effect from Chris Greening: 
 ##### https://dev.to/chrisgreening/simulating-simple-crt-and-glitch-effects-in-pygame-1mf1
@@ -346,7 +506,6 @@ FPS = 60
 BULLET_SPEED = 10
 BULLET_COOLDOWN = 0.5
 SOUND_VOLUME = 25
-ENEMY_MOVEMENT_DELAY = 1
 
 
 
@@ -355,25 +514,42 @@ bullet_sound = pygame.mixer.Sound("Invaders_Media/shoot.wav")
 enemy_death_sound = pygame.mixer.Sound("Invaders_Media/invaderkilled.wav")
 ship_death_sound = pygame.mixer.Sound("Invaders_Media/explosion.wav")
 music = pygame.mixer.Sound("Invaders_Media/music.mp3")
+menu_music = pygame.mixer.Sound("Invaders_Media/menu.mp3")
 
 ### ADJUST VOLUME
 bullet_sound.set_volume(SOUND_VOLUME/100)
 enemy_death_sound.set_volume(SOUND_VOLUME/100)
 ship_death_sound.set_volume(SOUND_VOLUME/100)
 music.set_volume(SOUND_VOLUME/100)
+menu_music.set_volume(SOUND_VOLUME/100)
 
 ### LOAD IMAGES
 ship_image = pygame.image.load("Invaders_Media/ship.png")
-enemy_image = pygame.image.load("Invaders_Media/enemy.png")
+enemy1_image = pygame.image.load("Invaders_Media/enemy1.png")
+enemy2_image = pygame.image.load("Invaders_Media/enemy2.png")
+logo_image = pygame.image.load("Invaders_Media/logo.png")
+bunker_image = pygame.image.load("Invaders_Media/bunker.png")
+bunker_slight_dmg_image = pygame.image.load("Invaders_Media/bunker1.png")
+bunker_damaged_image = pygame.image.load("Invaders_Media/bunker2.png")
+bunker_heavy_damage_image = pygame.image.load("Invaders_Media/bunker3.png")
+bunker_near_death_image = pygame.image.load("Invaders_Media/bunker4.png")
 
 ### TRANSFORM IMAGES
 scaled_ship = pygame.transform.scale(ship_image, (50,50))
-scaled_enemy = pygame.transform.scale(enemy_image, (50,50))
+scaled_enemy1 = pygame.transform.scale(enemy1_image, (50,50))
+scaled_enemy2 = pygame.transform.scale(enemy2_image, (50,50))
+scaled_logo = pygame.transform.scale(logo_image, (400,200))
+scaled_bunker = pygame.transform.scale(bunker_image, (200,200))
+scaled_bunker2 = pygame.transform.scale(bunker_slight_dmg_image, (200,200))
+scaled_bunker3 = pygame.transform.scale(bunker_damaged_image, (200,200))
+scaled_bunker4 = pygame.transform.scale(bunker_heavy_damage_image, (200,200))
+scaled_bunker5 = pygame.transform.scale(bunker_near_death_image, (200,200))
 icon_image = scaled_ship
-ship = Ship(scaled_ship)
 
 ## OBJECT LISTS
 bullets = []
+stars_list = []
+bunkers = load_bunkers()
 enemies = load_enemies(amount=32)
 
 ## Screen and objects
@@ -384,10 +560,17 @@ screen = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 pygame.display.set_caption("Galaxy Conquerors")
 
 
+ship = Ship(scaled_ship)
 outline = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 color = Color()
 key = Key()
 clock = pygame.time.Clock()
 
+
+
+menu_music.play()
+start_screen(stars_list)
+menu_music.stop()
 music.play()
 main()
+
