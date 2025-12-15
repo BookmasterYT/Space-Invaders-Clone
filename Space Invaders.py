@@ -1,3 +1,26 @@
+########################################################################
+########################################################################
+###                          _                     _                 ###
+###                          (_)                   | |               ###
+###  ___ _ __   __ _  ___ ___ _ _ ____   ____ _  __| | ___ _ __ ___  ###
+### / __| '_ \ / _` |/ __/ _ \ | '_ \ \ / / _` |/ _` |/ _ \ '__/ __| ###
+### \__ \ |_) | (_| | (_|  __/ | | | \ V / (_| | (_| |  __/ |  \__ \ ###   MADE BY: MAGUIRE HOUSE
+### |___/ .__/ \__,_|\___\___|_|_| |_|\_/ \__,_|\__,_|\___|_|  |___/ ###
+###     | |                                                          ###
+###     |_|                                                          ###
+########################################################################
+########################################################################
+
+
+#                            ##      ##        
+#                          ##############
+#                        ####  ######  ####
+#                      ######################
+#                      ##  ##############  ##     
+#                      ##  ##          ##  ##
+#                            ####  ####
+
+
 import pygame
 import time
 import random
@@ -14,7 +37,7 @@ class Star(object):
     def draw(self, screen_param):
         self.y += 2
         pygame.draw.circle(screen_param, color.white, (self.x, self.y), self.w)
-        
+
 class Button(object):
     def __init__(self,x,y,w,h,c,text):
         self.rect = pygame.Rect(x,y,w,h)
@@ -66,6 +89,8 @@ class Ship(object):
         self.x = WIDTH//2 - 50//2   # Finds the x-point at which the image will be centered on the screen
         self.y = HEIGHT-100
         self.rect = (self.x,self.y,50,50)
+        self.bullets_shot = 0
+        self.bullets_hit = 0
     def draw(self):
         self.rect = (self.x,self.y,50,50)
         screen.blit(self.img, (self.x,self.y))
@@ -114,6 +139,28 @@ class Enemy(object):
                 self.x += Enemy.speed
             if self.moving_left:
                 self.x -= Enemy.speed
+            if self.y >= HEIGHT-200:
+                results("You Lose")
+
+class UFO(object):
+    ufo_cooldown = 1
+    def __init__(self, img, x, y):
+        self.x = x
+        self.y = y
+        self.dead = True
+        self.w = 100
+        self.img = img
+        self.h = 50
+    def move(self):
+        if not self.dead:
+            self.x += 5
+            if self.x >= WIDTH-20:
+                self.dead = True
+    def draw(self):
+        self.rect = (self.x,self.y,self.w,self.h)
+        if not self.dead:
+            self.rect = (self.x,self.y,self.w,self.h)
+            screen.blit(self.img, (self.x,self.y))
 
 class Bullet(object):
     id = 0
@@ -148,6 +195,7 @@ class Bullet(object):
                 self.y += self.speed
                 self.collision_player()
             self.collision_bunker()
+            self.collision_ufo()
     def collision_enemy(self):
         if self.y <= 0:
             self.delete()
@@ -155,6 +203,7 @@ class Bullet(object):
             for Enemy in enemies:
                 if self.rect.colliderect(Enemy.rect):
                     if not Enemy.dead:
+                        ship.bullets_hit += 1
                         Enemy.delete()
                         self.delete()
     def collision_player(self):
@@ -170,6 +219,13 @@ class Bullet(object):
                 if not Bunker.dead:
                     Bunker.health -= 1
                     self.delete()
+    def collision_ufo(self):
+        if not ufo.dead:
+            if self.rect.colliderect(ufo.rect):
+                ufo.dead = True
+                ship.score += random.randint(50,200)
+                enemy_death_sound.play()
+                self.delete()
     def delete(self):
         i = 0
         for Bullet in bullets:
@@ -194,22 +250,9 @@ class Bunker(object):
             if self.health <= 0:
                 self.dead = True
 
-        
 
 
-def lose():
-    font = pygame.font.Font(None, 128)
-    ship_death_sound.play()
-    screen.fill(color.grey)
-    display_text("Game Over", color.red, 170, 230, font)
-    outline_effect(screen)
-    apply_crt_effect(screen)
-    screen_real.blit(screen, (0,0))
-    pygame.display.flip()
-    time.sleep(2)
-    quit()
-
-def win():
+def results(result):
     menu_music.stop() # Just in case
     music.stop()
     menu_music.play()
@@ -220,8 +263,10 @@ def win():
     while running:
         win_screen.fill(color.black)
         outline_effect(win_screen)
-        display_text("You Win!", color.white, 300, 100, big_font, win_screen)
+        display_text(result, color.white, 300, 100, big_font, win_screen)
         display_text(f"Score: {ship.score}", color.white, 350, 200, font, win_screen)
+        display_text(f"Bullets Shot: {ship.bullets_shot}", color.white, 325, 230, font, win_screen)
+        display_text(f"Bullet Accuracy: {round(ship.bullets_hit/ship.bullets_shot*100, 1)}%", color.white, 285, 260, font, win_screen)
         quit_button.draw(win_screen)
         stars(win_screen, stars_list)
         apply_crt_effect(win_screen)
@@ -261,6 +306,8 @@ def refresh_display():
     screen.fill(color.black)
     stars(screen, stars_list)
     ship.draw()
+    ufo.draw()
+    ufo.move()
     for Bullet in bullets:
         Bullet.fly()
     for Enemy in enemies:
@@ -302,15 +349,15 @@ def enemy_movement():
                     enemies[i].y += 10
                 break
         Enemy.movement_cooldown = enemies[0].delay
-    if ship.score >= 350:
+    if ship.bullets_hit >= 30:
         Enemy.delay = 0.1
-    elif ship.score >= 300:
+    elif ship.bullets_hit >= 25:
         Enemy.delay = 0.2
-    elif ship.score >= 250:
+    elif ship.bullets_hit >= 20:
         Enemy.delay = 0.4
-    elif ship.score >= 200:
+    elif ship.bullets_hit >= 15:
         Enemy.delay = 0.6
-    elif ship.score >= 100:
+    elif ship.bullets_hit >= 10:
         Enemy.delay = 0.8
 
 def cooldown():
@@ -318,6 +365,11 @@ def cooldown():
         Bullet.cooldown -= 1/(FPS*BULLET_COOLDOWN)
     if Enemy.movement_cooldown > 0:
         Enemy.movement_cooldown -= 1/(FPS*Enemy.delay)
+    
+    ## UFO spawns every {UFO_COOLDOWN} seconds
+    UFO.ufo_cooldown -= 1/(FPS*UFO_COOLDOWN)
+    if UFO.ufo_cooldown <= 0 and UFO.ufo_cooldown >= -0.1:
+        ufo.dead = False
 
 def event_checker():
     for event in pygame.event.get():
@@ -331,10 +383,10 @@ def event_checker():
                     key.d = True
                 if event.key == pygame.K_SPACE:
                     key.space = True
-                if event.key == pygame.K_F10:
-                    lose()
-                if event.key == pygame.K_F11:
-                    win()
+                if event.key == pygame.K_F10 or event.key == pygame.K_BACKSLASH:
+                    results("You Lose")
+                if event.key == pygame.K_F11 or event.key == pygame.K_BACKSPACE:
+                    results("You Win!")
             if event.type == pygame.KEYUP:
                 if event.key == pygame.K_a or event.key == pygame.K_LEFT:
                     key.a = False
@@ -343,13 +395,14 @@ def event_checker():
                 if event.key == pygame.K_SPACE:
                     key.space = False
                     if Bullet.cooldown <= 0:
-                        bullets.append(Bullet()) 
+                        bullets.append(Bullet())
+                        ship.bullets_shot += 1
                         bullet_sound.play()
                         Bullet.cooldown = BULLET_COOLDOWN
     if ship.health <= 0:
-        lose()
-    elif ship.score == 400:
-        win()
+        results("You Lose")
+    elif ship.bullets_hit > 31 or (ship.bullets_hit == 31 and ship.score == 400):
+        results("You Win!")
 
 def main():
     running = True
@@ -373,8 +426,6 @@ def outline_effect(screen_param):
     pygame.draw.rect(outline, color.dark_transparent_black, (0,0,WIDTH,HEIGHT), 10, 50)
     pygame.draw.rect(outline, color.dark_grey, (0,0,WIDTH,HEIGHT), 10, 30)
     pygame.draw.rect(outline, color.dark_grey, (0,0,WIDTH,HEIGHT), 10)
-
-
     screen_param.blit(outline, (0,0))
 
 def start_screen(stars_param):
@@ -506,38 +557,41 @@ FPS = 60
 BULLET_SPEED = 10
 BULLET_COOLDOWN = 0.5
 SOUND_VOLUME = 25
+UFO_COOLDOWN = random.randint(10,20)
 
-
+media_path = "games/"
 
 ### SOUND FX AND MUSIC
-bullet_sound = pygame.mixer.Sound("Invaders_Media/shoot.wav")
-enemy_death_sound = pygame.mixer.Sound("Invaders_Media/invaderkilled.wav")
-ship_death_sound = pygame.mixer.Sound("Invaders_Media/explosion.wav")
-music = pygame.mixer.Sound("Invaders_Media/music.mp3")
-menu_music = pygame.mixer.Sound("Invaders_Media/menu.mp3")
+bullet_sound = pygame.mixer.Sound(f"{media_path}Invaders_Media/shoot.wav")
+enemy_death_sound = pygame.mixer.Sound(f"{media_path}Invaders_Media/invaderkilled.wav")
+ship_death_sound = pygame.mixer.Sound(f"{media_path}Invaders_Media/explosion.wav")
+music = pygame.mixer.Sound(f"{media_path}Invaders_Media/music.mp3")
+menu_music = pygame.mixer.Sound(f"{media_path}Invaders_Media/menu.mp3")
 
 ### ADJUST VOLUME
 bullet_sound.set_volume(SOUND_VOLUME/100)
 enemy_death_sound.set_volume(SOUND_VOLUME/100)
 ship_death_sound.set_volume(SOUND_VOLUME/100)
 music.set_volume(SOUND_VOLUME/100)
-menu_music.set_volume(SOUND_VOLUME/100)
+menu_music.set_volume(SOUND_VOLUME/50)
 
 ### LOAD IMAGES
-ship_image = pygame.image.load("Invaders_Media/ship.png")
-enemy1_image = pygame.image.load("Invaders_Media/enemy1.png")
-enemy2_image = pygame.image.load("Invaders_Media/enemy2.png")
-logo_image = pygame.image.load("Invaders_Media/logo.png")
-bunker_image = pygame.image.load("Invaders_Media/bunker.png")
-bunker_slight_dmg_image = pygame.image.load("Invaders_Media/bunker1.png")
-bunker_damaged_image = pygame.image.load("Invaders_Media/bunker2.png")
-bunker_heavy_damage_image = pygame.image.load("Invaders_Media/bunker3.png")
-bunker_near_death_image = pygame.image.load("Invaders_Media/bunker4.png")
+ship_image = pygame.image.load(f"{media_path}Invaders_Media/ship.png")
+enemy1_image = pygame.image.load(f"{media_path}Invaders_Media/enemy1.png")
+enemy2_image = pygame.image.load(f"{media_path}Invaders_Media/enemy2.png")
+ufo_image = pygame.image.load(f"{media_path}Invaders_Media/ufo.png")
+logo_image = pygame.image.load(f"{media_path}Invaders_Media/logo.png")
+bunker_image = pygame.image.load(f"{media_path}Invaders_Media/bunker.png")
+bunker_slight_dmg_image = pygame.image.load(f"{media_path}Invaders_Media/bunker1.png")
+bunker_damaged_image = pygame.image.load(f"{media_path}Invaders_Media/bunker2.png")
+bunker_heavy_damage_image = pygame.image.load(f"{media_path}Invaders_Media/bunker3.png")
+bunker_near_death_image = pygame.image.load(f"{media_path}Invaders_Media/bunker4.png")
 
 ### TRANSFORM IMAGES
 scaled_ship = pygame.transform.scale(ship_image, (50,50))
 scaled_enemy1 = pygame.transform.scale(enemy1_image, (50,50))
 scaled_enemy2 = pygame.transform.scale(enemy2_image, (50,50))
+scaled_ufo = pygame.transform.scale(ufo_image, (100,50))
 scaled_logo = pygame.transform.scale(logo_image, (400,200))
 scaled_bunker = pygame.transform.scale(bunker_image, (200,200))
 scaled_bunker2 = pygame.transform.scale(bunker_slight_dmg_image, (200,200))
@@ -557,7 +611,8 @@ font = pygame.font.Font(None, 32)
 pygame.display.set_icon(icon_image)
 screen_real = pygame.display.set_mode((WIDTH,HEIGHT))
 screen = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-pygame.display.set_caption("Galaxy Conquerors")
+pygame.display.set_caption("Space Invaders")
+
 
 
 ship = Ship(scaled_ship)
@@ -565,6 +620,7 @@ outline = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 color = Color()
 key = Key()
 clock = pygame.time.Clock()
+ufo = UFO(scaled_ufo, -20, 30)
 
 
 
@@ -572,5 +628,6 @@ menu_music.play()
 start_screen(stars_list)
 menu_music.stop()
 music.play()
-main()
 
+if __name__ == "__main__":
+    main()
